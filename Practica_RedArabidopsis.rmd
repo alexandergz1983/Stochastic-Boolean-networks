@@ -1,0 +1,456 @@
+---
+title: "REDES BOOLEANAS ESTOCASTICAS"
+output: html_document
+date: "2026-02-09"
+---
+##
+
+install.packages("BoolNet")
+install.packages("Rlab")
+install.packages("BoolFilter")
+install.packages("devtools")
+install.packages("dplyr")
+install_github("mar-esther23/boolnet-perturb")
+
+library(devtools)
+install_github("mar-esther23/boolnet-perturb")
+library(BoolNetPerturb)
+
+```{r setup, include=FALSE}
+#install.packages("BoolNet")
+#install.packages("Rlab")
+#install.packages("BoolFilter")
+#install.packages("devtools")
+#install.packages("dplyr")
+#library(devtools)
+#install_github("mar-esther23/boolnet-perturb")
+#library(BoolNetPerturb)
+```
+##
+
+comenzamos cargando las librerias necesarias
+```{r}
+library(BoolNetPerturb)
+library(Rlab)
+library(BoolNet)
+library(BoolFilter)
+library(devtools)
+library(dplyr)
+library(BoolNetPerturb)
+```
+##
+
+**parte 1** 
+
+vamos a cargar la red del articulo "morphogenesis" 
+la red de arabidopsis
+la guardamos en el objeto net
+
+```{r}
+net = loadNetwork("/Volumes/alex/BS_scripts_clase/boolean-2026/Tutorial_Redes_booleanas_estocásticas_2026/ejemplo_class1paper/ATH_flower_cell_fate_determination.net.txt")
+```
+##
+
+podemos visualizar la red 
+```{r}
+plotNetworkWiring(net)
+net
+```
+##
+
+obtener atractores
+guardamos en el objeto attr
+```{r}
+attr = getAttractors(net)
+attr
+```
+##
+
+attr lo imprime feo, nos dice que tenemos 10 actractores como en el estudio
+6 organos de floración y 4 meristemos de infloresencia 
+
+##
+mostrar atractores mediante vectores de ceros y unos, es decir "determinista y discreta"
+
+```{r}
+par(mfrow = c(1,1))
+plotAttractors(attr)
+```
+##
+
+como podeis ver, nos salen los 10 atractores tal y como se menciona el articulo
+
+graficamos los atractores 
+tambien en la consola se nos imprime los estados binarios
+la tabla de vectores de 0 y 1
+hacemos zoom para ver bien los nombres
+si contrastamos con el articulo la grafica obtenida, 
+veremos que hace referencia a la figura 1 (circulos)
+
+4 para IM (meristemos de la inflorescencia)
+6 para los organos florales
+
+si esto lo comparamos con la forma organizada del articulo, podréis observar que se corresponde al orden de diferencia de los estados de morfogenesis.
+
+ver como depende la diagonal del ruido (p = 0.0, sin ruido)
+la función epigeneticLandscape nos modela la matrix de Markov
+la cual se alimenta de la red "net"
+
+##
+
+a continuación sacamos la matriz de Markov
+
+"p" no hace referencia al ruido (1%= 0.01 en el articulo Tabla1)
+"p" tambien significa la probabilidad
+
+modelo de Márkov es un tipo especial de proceso estocástico discreto en el que la  probabilidad de que ocurra un evento depende solamente del evento inmediatamente anterior. es decir un proceso en cadena, donde cada número está conectado directamente no sólo con uno, sino con varios números anteriores
+
+corremos, tarda unos segundos y obtenemos nuestra matriz de Markov y se guarda en el objeto EL
+
+epigeneticLandscape es la función encargada de generar la matriz de markov
+
+primero lo hacemos con un **ruido "p=0.01"**
+```{r}
+EL = epigeneticLandscape(net, p = 0.01) #p --> probabilidad de que se aplique el ruido, como en el articulo
+```
+##
+
+Adicionalmente correremos, un objeto llamado ELO con probabilidad de "cero", es decir una matriz de Markov de 6 x 6.
+ojo! nunca veremos los mismos números, ya que al ser probabilidades, se generan números aleatorios en la matriz.
+
+```{r}
+View(EL)
+```
+##
+
+Adicionalmente correremos, un objeto llamado ELO con probabilidad de "cero". esto es solo para que veáis la diferencia de probabilidad p=0 y p=0.01
+```{r}
+ELO= epigeneticLandscape(net, p = 0)
+View(ELO)
+```
+
+##
+
+veis la diferencia entre ambas matrices: una es: determinista y discreta y el otro estocastico
+así, en la matriz EL0 (discreta) podéis ver y concluir que los atratores
+no pueden desobecer las reglas, es decir por ej: el actrator 1 solo puede ir al atractor 1
+el actractor 2 al 2 y así...(Estado estable estacionario)
+
+Es por ello que deciamos que el factor de ETA que hace referencia la ruido debe ser: > 0 que entendemos entonces obedecer o desobecer las reglas?
+
+de hecho, con lo que hemos ejecutado hasta ahora, ya tenemos la parte más compleja
+
+##
+
+Ahora, si quisieramos preguntarnos cual es la probabilidad de pasar por ej del atractor 5
+al atractor 3, con un valor de p = 0.01 (1%), cual seria esa probabilidad?
+```{r}
+EL[5,3] # hacemos un subconjunto de la matriz con [row "5", col "3"] para filtrar los datos que nos interesan en este caso tenemos un objeto de dos dimensiones [row, col] y nos extrae el resultado
+```
+
+##
+
+el resultado: 2.273378e-09 (tabla)
+
+```{r}
+EL[1,2]
+```
+
+##
+
+si quisieramos obtener por ejemplo aquellos valores iguales o superiores a 0.01 podriamos implementar este codigo, es decir, ver la probabilidad de para aquellos atractores de pasar a otro actractor
+si son iguales o superiores al 1% (0.01)
+
+Inicializamos las variables para almacenar los valores más grandes y sus posiciones
+
+```{r}
+# Inicializamos las variables para almacenar los valores más grandes y sus posiciones
+valores_mas_grandes <- numeric(0)
+filas_valores <- numeric(0)
+columnas_valores <- numeric(0)
+
+# Bucle for para buscar los valores más grandes y las posiciones
+for (i in 1:nrow(EL)) {
+  for (j in 1:ncol(EL)) {
+    valor_actual <- EL[i, j]
+    if (valor_actual > 0.01 && valor_actual < 0.9) {
+      valores_mas_grandes <- c(valores_mas_grandes, valor_actual)
+      filas_valores <- c(filas_valores, i)
+      columnas_valores <- c(columnas_valores, j)
+    }
+  }
+}
+```
+
+##
+
+Crear un data frame con los resultados
+```{r}
+resultados <- data.frame(Fila = filas_valores, Columna = columnas_valores, Valor = valores_mas_grandes)
+```
+
+##
+
+Imprimir los resultados
+```{r}
+print(resultados)
+```
+
+##
+
+**parte 2**
+
+ahora pasamos a los tamaños de las cuencas
+
+recordatorio: una cuenca de atracción es un conjunto de valores de variables que llevan a un sistema a un estado estable, 
+a menudo representado como una forma de embudo o pozo en un diagrama de fase.
+como en la ultima figura del articulo
+
+esto implica que una cuenca de atracción más grande pueda atraer mas estados iniciales.
+
+el tamaño de las cuencas de atracción está determinado por la complejidad del sistema y la cantidad de estados estables a los que puede converger a partir de diferentes condiciones iniciales.
+
+ojo! en los modelos booleanos discretos podemos suponer que el tamaño de las cuencas de atracción gobiernan el paso hacia una determinada cuenca.
+
+sin embargo, ocurrirá lo mismo en las redes booleanas estocasticas?...
+
+con basinsize podemos estudiar lo anteriormente planteado.
+
+creamos el objeto "basinsize=cuenca" de atracción, que es una secuencia, en este caso de 1 a 10 x 1, por un salto de 1
+```{r}
+basinsize = seq(1, 10, by=1)
+basinsize
+```
+
+##
+
+attr$attractors
+attr$attractors: podemos ver  varios detalles, entre ellos el tamaño de la cuenca, ej:
+[[8]]$basinSize
+[1] 136
+
+luego hacemos un bucle for (foor loop) para guardar en el objeto basinsize.
+recordemos que el objeto "attr" es una lista donde tenemos los atractores.
+si quisieramos ver mas caracteristicas del objeto attr podemos hacer lo siguiente:
+
+este for loop nos va sacar el tamaño de las cuencas de atracción.
+
+```{r}
+for (ii in 1:length(basinsize)){
+  basinsize[ii] = attr$attractors[[ii]]$basinSize
+}
+basinsize # ahora entonces con basinsize podemos ver el tamaño de las cuencas de atraccion
+```
+
+##
+
+salida: [1] 2970  812   94   12  136 3064  824  136   72   72, sin embargo estos numero por si solos no nos dicen mucho
+
+```{r}
+n <- 13 # no.variables en el modelo
+basinsize_norm <- basinsize/(2^n) 
+```
+##
+
+al normalizar (0-100%) tamaños de las cuencas en el relación al numero de variables basinsize/(2^n). " variables del sistema 13" normalizamos para poder saber quien saber quien tiene el % de cuenca más grande
+
+```{r}
+basinsize_norm
+```
+##
+
+salida:
+[1] 0.362548828 0.099121094 0.011474609 0.001464844 0.016601562 0.374023438 0.100585938 0.016601562
+[9] 0.008789062 0.008789062
+
+por ej: 2970 que se corresponde a 0.362548828 y es el 2do más grande, significa que tiene 36% posibilidades a partir de todos sus estados iniciales (2 a la n) de caer en el atractor 1, en esta cuenca de atracción 
+
+0.374023438 (3064) es el más grande y tiene 37% de caer en el atractor 6
+
+##
+
+ahora, añadiremos una diagonal (para ver si hay una relacion lineal)
+
+con este plot vamos a graficar la probabilidad de permanecer en un atractor contra el tamaño de las cuencas
+esta probabilidad la sacamos en este caso de la matriz de markov "EL"
+la función lines nos traza la linea diagonal para ver si hay correlacion par(mfrow = c(1,1), din = c(1,1))
+
+```{r}
+plot(diag(as.matrix(EL)), basinsize_norm, pch = 20, cex = 1, 
+     xlab = "probabilidad de permanecer en el atractor", 
+     ylab = "tamaño de cuenca normalizado",cex.lab = 0.8,las=0.8)
+lines(x = c(min(diag(as.matrix(EL))), max(diag(as.matrix(EL)))), # lines nos graficará la diagonal para ver si hay correlación
+      y = c(min(basinsize_norm), max(basinsize_norm)))
+```
+##
+
+que vemos?...
+primero, el grafico lo que nos muestra es la diagonal de los 0.9 en "EL" contra el tamaño de las cuencas normalizado: [1] 0.362548828 0.099121094 0.011474609 0.001464844 0.016601562 0.374023438 0.100585938 0.016601562
+[9] 0.008789062 0.008789062
+
+incialmente, parece que a mayor tamaño normalizado de la cuenca, mayor probabilidad de permanecer en el atractor, sin embargo, vemos que las distribuciones no se posicionan directamente sobre la diagonal "grafica entre tamaños de las cuencas y probabilidad de transiciónn de atractor "
+
+que vemos?
+R/: aunque aumente el tamaño de la cuenca, no se observa una distribución de correlación
+
+conclusión: no hay correlación directa, aunque parece que si influye.
+
+##
+
+Adicionalmente a lo anterior, podemos ver la probabilidad de transición de atractor especifico a otro. j a atractor 1, j = 1, 2, ..., 10. Aca lo queremos ver ver es la probabilidad desde el atractor 1 saltar al atractor 2 y si esto es afectado por el tamaño de la cuenca. j representa algun atractor, j = 1, 2, ..., 10). este plot representa la probalidad transición desde atractor 1 EL[,1]  al atractor 2 EL[,2]
+```{r}
+plot(EL[,2], basinsize_norm, pch = 20, cex = 1, 
+     xlab = "probabilidad de transición",
+     ylab = "tamaño de cuenca normalizado", cex.lab = 0.8)
+```
+
+##
+
+vemos que, aunque aumente el tamaño de la cuenca no se sigue una distribución de correlacción
+
+conclusion: "el efecto de las transiciones no se atribuye directamente al tamaño de las cuencas" (auque si influye), "en definitiva: aunque el tamaño de la cuenca importa, no es un determinante directo"
+
+##
+
+* IMPORTANTE *
+# ahora, recuerden estamos estuidando la magnitud del ruido. entonces, ¿que pasaria si cambiamos el ruido?, ¿qué pasaria con las transiciones?. de hecho en relación a la figura 7 del articulo, se menciona que la unica forma que se pase de inflorescencia a florescencia es aumentando signifativamente el ruido (p)
+
+##
+
+**parte tres**
+
+en este ultimo paso se utilizará la matriz de markov "EL" para multiplicarlapor un vector de estados iniciales distintos que en el script se denomina "v", y se iteran a muchos tiempos (Nsteps)
+
+si empiezas en atractor 1 despues de 100 pasos cual es la probabilidad de permanecer en 1 o pasar a otro actractor.entonces, primero convertirmos el objeto "EL" que es un dataframe, para comprobarlo podemos hacer lo siguiente: str "estructura"
+
+```{r}
+str(EL) # nos dira de que tipo de objeto se trata
+```
+##
+
+simular una cadena de markov, 100 pasos, necesitamos convertilo a matriz y guardarlo en el objeto P, como se ve a continuación:
+
+```{r}
+P = as.matrix(EL)
+```
+##
+
+vemos como queda la matriz
+
+```{r}
+P
+```
+
+##
+
+numero de pasos le diremos que será 100
+```{r}
+Nsteps <- 100
+```
+##
+
+guardamos la distribución inicial en pi0
+
+```{r}
+pi0 = c(1,0,0,0,0,0,0,0,0,0) # distribution de probabilidad inicial: x(0) =
+```
+##
+
+creamos un vector llamado v
+```{r}
+v = vector("numeric", Nsteps) # crear un vector vacio de tamaño.
+```
+
+##
+
+creamos un vector llamado r
+```{r}
+r = length(pi0) # tamaño para la muestra de la distribución inicial 
+```
+##
+
+esto lo que hace en esencia, es multiplicar un vector de estados iniciales a la matriz. entoces es ver desde un estado inicial con la matriz de probabilidad que sucede a los 100 pasos en este caso. y en este caso queremos ver la probabilidad de permanecer en 1, que es donde empezamos: pi0 = c(1,0,0,0,0,0,0,0,0,0)
+
+```{r}
+v[1] = 1 #sample(r, 1, prob=pi0) 
+```
+
+##
+
+la primer entrada del vector es una muestra de 1,2 r la probabilidad de obtener cada uno de estos elementos est? dada por pi0
+
+##
+
+corremos nuestro loop para los objetos creados anteriormente. Una sola realizacion de la cadena
+```{r}
+for (i in 2:Nsteps){
+  v[i] = sample(r, 1, prob=P[v[i-1],]) # muestrea el nuevo valor: 
+  # selecciona el renglon en la matriz de probabilidades que da el vector 
+  # de probabilidad de acuerdo con el estado actual
+}
+```
+##
+
+despues de correr mi loope vemos la cadena mostrar cadena
+
+```{r}
+matplot(v, type="l", lwd=2.5, col=3,  xlab="t", ylab="Attractor")
+```
+##
+
+**nota:** vereis que cada vez que ejecutemos el **for** anterior, veremos algo diferente. esto se debe a que se tratan de probabilidades.
+
+el grafico nos muestra la probabilidad a los 100 pasos del atractor 1 que termine en otro atractor para una sola celula por ej.
+
+ojo! con este ejemplo, si lo comparamos con EL se oberva que la probabilidad es inferior de permanecer en 1 es inferior, esto se debe a que son pocas interaciones. Entre mas iteraciones más parecido a la diagonal EL.
+
+##
+
+ahora, vamos a iterar varias veces, para sacar promedios de las veces de que cada atractor fue visitado en cada paso de tiempo, es decir, la probabilidad del atractor i al tiempo N, para i = 1,2,3. con las iteraciones lo que hacemos es repetir el proceso para 500 celulas
+
+```{r}
+iterations=500 # esta iteracción lo que nos permite es sacar promedios de las distribuciones
+```
+
+##
+
+matriz para guardar las cadenas 
+```{r}
+V = matrix(nrow = iterations, ncol = Nsteps)
+V[,1] = rep(1, iterations)
+
+for (jj in 1:iterations){
+  for (i in 2:Nsteps){
+    V[jj, i] = sample(r, 1, prob=P[v[i-1],]) 
+  }
+}
+```
+##
+
+ahora en el plot vamos a ver probabilidades. por ej: probabilidad de estar en atractor 1 al tiempo 49
+
+```{r}
+mean(V[, 49] == 1)
+```
+```{r}
+plot(seq(1,100), colMeans(V[,] == 1), type = "l") # probabilidad de caer e el actractor 3 en 100 pasos tiempo
+```
+
+```{r}
+mean(V[, 51] == 2)
+```
+
+```{r}
+plot(seq(1,100), colMeans(V[,] == 2), type ="l")
+```
+```{r}
+plot(seq(1,100), colMeans(V[,] == 3), type ="l")
+plot(seq(1,100), colMeans(V[,] == 4), type ="l")
+plot(seq(1,100), colMeans(V[,] == 5), type ="l")
+plot(seq(1,100), colMeans(V[,] == 7), type ="l")
+plot(seq(1,100), colMeans(V[,] == 8), type ="l")
+plot(seq(1,100), colMeans(V[,] == 9), type ="l")
+plot(seq(1,100), colMeans(V[,] == 10), type ="l")
+```
+
+
